@@ -1,0 +1,16 @@
+@tokens := {
+
+}
+
+
+program :=
+    block
+
+block :=
+    a=';'.join(stmt)+ { a }
+
+stmt :=
+    | assign_stmt
+
+assign_stmt :=
+    a=NAME ":=" b=value { Assign(a, b) }
