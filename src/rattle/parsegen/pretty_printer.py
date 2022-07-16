@@ -60,7 +60,7 @@ class GrammarPrinter(visitor.GrammarWalker):
             return
 
         tokens = list(grammar.tokens.members())
-        tokens = ",\n                ".join(f"{t.name}={t.value}" for t in tokens)
+        tokens = ",\n                ".join(f"{t.name}={t:src}" for t in tokens if not isinstance(t.value, int))
         file.write(
             dedent(
                 f"""\
@@ -101,12 +101,12 @@ class GrammarPrinter(visitor.GrammarWalker):
 
     def visit_Rhs(self, node):
         alts = [self.visit(a) for a in node.alts]
-        return "|".join(alts)
+        return " | ".join(alts)
 
     def visit_Alt(self, node):
         v = self.visit(node.exp)
         if node.action is not None:
-            return f"{v} {{ {node.action} }}"
+            return f'{v} {{ "{node.action}" }}'
         else:
             return f"{v}"
 
@@ -132,9 +132,6 @@ class GrammarPrinter(visitor.GrammarWalker):
         v = self.visit(node.pattern)
         return f"{self._exp_name(node)}{v}*"
 
-    def visit_NonTerminal(self, node):
-        return f"{self._exp_name(node)}{node.name}"
-
     def visit_Atom(self, node):
         if isinstance(
             node.value,
@@ -146,6 +143,8 @@ class GrammarPrinter(visitor.GrammarWalker):
                 str,
             ):
                 return f'{self._exp_name(node)}"{token.value}"'
+            elif isinstance(token.token_type.value, str):
+                return f"{self._exp_name(node)}{token.token_type:src}"
             else:
                 return f"{self._exp_name(node)}{token.token_type.name}"
         else:

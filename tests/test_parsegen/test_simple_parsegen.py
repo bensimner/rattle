@@ -42,9 +42,7 @@ def test_pprint_sg1():
     assert f.getvalue() == dedent(
         """\
         @tokens := {
-            IDENT=0,
-            STRING=1,
-            NUMBER=2
+
         };
 
         @start_symbol := S;

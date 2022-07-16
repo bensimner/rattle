@@ -15,7 +15,7 @@ def assert_parses(gram: Grammar, src: str) -> None:
 
 
 def assert_not_parses(gram: Grammar, src: str) -> None:
-    f = io.StringIO(src)  #
+    f = io.StringIO(src)
     with pytest.raises(errors.RatParseError, match="Unexpected EOF"):
         gram.parse(f)
 

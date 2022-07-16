@@ -2,8 +2,6 @@ import io
 
 from hypothesis import given, strategies as st
 
-from rattle.logging import log_action, log_call
-
 from rattle.parsegen.grammar import (
     Grammar,
     Rule,
@@ -131,6 +129,7 @@ def Rule_strategy(draw):
 @st.composite
 def Grammar_strategy(draw):
     rules = draw(st.lists(Rule_strategy(), min_size=1))
+    rules = {r.lhs: r for r in rules}
     return Grammar(
         tokens=None,
         header=None,

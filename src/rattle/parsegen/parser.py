@@ -4,9 +4,9 @@ from rattle import (
 from rattle.utils.indexed_stream import (
     IndexedStream,
 )
-from rattle.logging import (
-    log_action,
-)
+from rattle.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class Parser:
@@ -43,9 +43,9 @@ class Parser:
         self._i += 1
 
     def accept(self, tok):
-        with log_action(
+        with logger.start(
             "accept",
-            token=repr(tok),
+            token=tok,
         ) as ctx:
             try:
                 lk = self.peek()
@@ -68,5 +68,5 @@ class Parser:
                 )
 
             self.consume()
-            ctx.add_success_fields(consumed=repr(lk))
+            ctx.add_success_fields(consumed=lk)
             return lk

@@ -13,14 +13,19 @@ def assert_tokenizes_to(
     else:
         token_tree = default_token_tree
     toks = list(tokenize(io.StringIO(src), filename="<unknown>", token_tree=token_tree))
+    stripped_src_toks = [Token(t.token_type, t.value, None) for t in toks]
+    stripped_src_types = [t.token_type for t in stripped_src_toks]
+    expected_types = [t.token_type for t in expected_tokens]
 
-    for actual, expected in zip(toks, expected_tokens):
-        assert actual.token_type == expected.token_type
+    # check all the right tokens are there
+    assert stripped_src_types == expected_types
 
-        if expected.value is not None:
-            assert expected.value == actual.value
-
-    assert len(toks) == len(expected_tokens)
+    stripped_src_values = [
+        tactual.value if texpected.value is not None else None
+        for (tactual, texpected) in zip(stripped_src_toks, expected_tokens)
+    ]
+    expected_values = [t.value for t in expected_tokens]
+    assert stripped_src_values == expected_values
 
 
 class TokenEnumEq:

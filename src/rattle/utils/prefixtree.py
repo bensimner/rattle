@@ -1,134 +1,138 @@
 import re
+from dataclasses import dataclass, field
+from contextlib import contextmanager
+from collections import deque
+from tokenize import Token
 
+from rattle.errors import TokenizeError
 from rattle.utils.itertools import (
     find_exactly_one,
 )
 
+from rattle.logging import get_logger
 
-class PrefixTree:
-    """A prefix tree"""
+logger = get_logger(__name__)
 
-    def __init__(
-        self,
-    ):
-        self._value = None
-        self._tree = {}
 
-    def insert(
-        self,
-        key,
-        value,
-        new=None,
-    ):
-        if key == "":
-            if self._value is not None and self._value != value:
-                raise ValueError("duplicate key")
-            self._value = value
-            return
+@dataclass
+class StepResult:
+    token_type: object
+    next: object | None
+    consumed: int
+    converted: str
 
-        c = key[0]
-        c = re.escape(c)
 
-        try:
-            v = self._tree[c]
-        except KeyError:
-            if new is None:
-                new = PrefixTree()
-            v = self._tree[c] = new
+@dataclass
+class RegexEntry:
+    pattern: str
+    token_type: object
+    next: object | None
 
-        v.insert(
-            key[1:],
-            value,
-        )
-
-    def insert_step(
-        self,
-        c_pattern,
-        value,
-        new=None,
-    ):
-        try:
-            self._tree[c_pattern]
-        except KeyError:
-            if new is None:
-                new = PrefixTree()
-            v = self._tree[c_pattern] = new
-            v._value = value
+    def step(self, key: str) -> StepResult | None:
+        m = re.search(self.pattern, key)
+        if m is not None:
+            s = m.group(0)
+            consumed = len(s)
+            return StepResult(self.token_type, self.next, consumed, s)
         else:
-            raise ValueError(f"duplicate key: {c_pattern}")
-
-        return v
-
-    def step(self, c):
-        try:
-            k = find_exactly_one(
-                k
-                for k in self._tree
-                if re.fullmatch(
-                    k,
-                    c,
-                )
-            )
-        except ValueError:
-            raise KeyError(c) from None
-
-        return self._tree[k]
-
-    def split_prefix(self, s):
-        """given a string, follow the tree and return (token, remaining)"""
-        if s == "":
             return None
 
-        i = 0
+    def __hash__(self):
+        return hash(id(self))
 
-        tree = self
-        while i < len(s):
-            c = s[i]
+    def __eq__(self, other):
+        return self is other
 
-            try:
-                tree = tree.step(c)
-            except KeyError:
-                # woo, finished a token!
-                tok_src = s[:i]  # not including `i`
-                return (
-                    (
-                        tok_src,
-                        tree._value,
-                    ),
-                    s[i:],
-                )
-            else:
-                i += 1
 
-        #  we (possibly) found a token!
-        # note that it might not be a valid token if tree._value is None.
-        tok_src = s  # and, the whole string was a single token
-        return (
-            (
-                tok_src,
-                tree._value,
-            ),
-            "",
-        )
-
-    def pprint(
-        self,
-    ):
-        lines = []
-        lines.append(f"- {self._value!r}")
+def _attach_next(tree: "PrefixTree", next: "PrefixTree", seen: "set[PrefixTree] | None" = None) -> None:
+    """Ensure all paths in tree are followed by `next`"""
+    if seen is None:
         seen = set()
-        seen.add(self)
-        for (
-            k,
-            v,
-        ) in self._tree.items():
-            if v in seen:
-                s = "[..]"
-            else:
-                s = v.pprint()
-            seen.add(v)
-            sublines = s.splitlines()
-            lines.append(f"|- {k!r}")
-            sublines = ["  " + line for line in sublines]
-            lines.extend(sublines)
-        return "\n".join(lines)
+
+    for e in tree.tree:
+        if e in seen:
+            continue
+
+        seen.add(e)
+
+        if e.next is None:
+            e.next = next
+        else:
+            _attach_next(e.next, next, seen=seen)
+
+
+@dataclass
+class PrefixTree:
+    """A hierarchical prefix tree"""
+
+    name: str
+    token_type: object | None = None
+    tree: list = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.name is None:
+            raise ValueError("name cannot be None")
+
+    def insert_step_regex(self, key_pattern, value, next=None, next_name=None) -> "PrefixTree":
+        if next is None:
+            next = PrefixTree(next_name)
+
+        self.tree.append(RegexEntry(key_pattern, value, next))
+
+        return next
+
+    def insert_step_tree(self, tree: "PrefixTree", next=None, next_name=None, converter=None) -> "PrefixTree":
+        if next is None:
+            next = PrefixTree(next_name)
+
+        _attach_next(tree, next)
+        self.tree.extend(tree.tree)
+
+        return next
+
+    def insert_word(self, key, value) -> None:
+        cur = self
+        for c in key[:-1]:
+            try:
+                r = self.step(cur, c)
+                cur = r.next
+            except TokenizeError:
+                cur = cur.insert_step_regex(re.escape(c), None, next_name=f"tok_{key}_post_{c}")
+        # separate out -1 case, as it needs to tag with the `value`
+        # but not the previous ones!
+        cur.insert_step_regex(re.escape(key[-1]), value, None, next_name=f"post_{key}-deadend")
+
+    def step(self, tree, key) -> StepResult:
+        for e in tree.tree:
+            r = e.step(key)
+            if r is not None:
+                return r
+        raise TokenizeError(f"unknown symbol {key!r}")
+
+    def split_prefix(self, s: str):
+        with logger.start("split_prefix", level=logger.level.IN_TESTS, s=s, tree=self.name) as ctx:
+
+            cur = self
+            consumed = 0
+            r = None
+
+            for c in s:
+                ctx.add_message("try_char", c=c, tree=cur.name)
+
+                try:
+                    r = self.step(cur, c)
+                except TokenizeError:
+                    break
+                else:
+                    ctx.add_message("stepped", r=r)
+                    assert isinstance(r, StepResult)
+                    consumed += r.consumed
+                    cur = r.next
+
+            if not isinstance(r, StepResult):
+                raise TokenizeError()
+
+            tok_src = s[:consumed]  # not including `i`
+            r = (tok_src, r.token_type, s[consumed:])
+            ctx.add_success_field(r=r)
+            return r

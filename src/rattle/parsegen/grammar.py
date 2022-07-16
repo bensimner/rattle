@@ -12,18 +12,9 @@ from xml.etree.ElementInclude import (
 from rattle import (
     errors,
 )
-from rattle.utils.enums import (
-    enum,
-    auto,
-)
-from rattle.logging import (
-    log_action,
-    log_call,
-)
-
-from rattle.parsegen import (
-    token_info,
-)
+from rattle.utils.enums import enum
+from rattle.logging import get_logger
+from rattle.parsegen import token_info
 from rattle.parsegen.tokenizer import (
     tokenize,
     build_prefix_tree,
@@ -35,6 +26,8 @@ from rattle.parsegen.parser import (
 from rattle.parsegen import (
     norm,
 )
+
+logger = get_logger(__name__)
 
 
 @dataclass(kw_only=True)
@@ -78,6 +71,8 @@ class Grammar:
 
         # check consumed entire input
         if not parser.at_eof():
+            # kill tokenizer
+            toks.close()
             raise errors.RatParseError("Unexpected EOF")
 
         return val
@@ -182,7 +177,7 @@ class Rule(GrammarExp):
     lhs: str
     rhs: "Rhs"
 
-    @log_call(
+    @logger.log_calls(
         skip_args=[
             "self",
             "gram",

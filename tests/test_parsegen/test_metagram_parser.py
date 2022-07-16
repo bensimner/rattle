@@ -7,6 +7,25 @@ from rattle.parsegen.metagram import MetaGram
 from .tokenizer_helpers import TokenEnumEq, assert_tokenizes_to
 from .parser_helpers import assert_parses, assert_parses_to, assert_not_parses
 
+
+GRAM_NO_HEADERS = """\
+X := Z;
+"""
+
+
+def test_tokenize_gram_no_headers():
+    assert_tokenizes_to(
+        MetaGram,
+        GRAM_NO_HEADERS,
+        [
+            Token(MetaGram.tokens.IDENT, "X"),
+            Token(MetaGram.tokens.ASSIGN),
+            Token(MetaGram.tokens.IDENT, "Z"),
+            Token(MetaGram.tokens.SEMICOLON),
+        ],
+    )
+
+
 EXAMPLE_GRAM1 = """\
 @tokens := {
     A=";",
@@ -46,7 +65,7 @@ def test_tokenize_gram1():
 
 def test_parse_gram1():
     tokens = [("A", ";")]
-    rules = [grammar.Rule("X", grammar.Rhs([grammar.Alt(grammar.Atom(None, "Z"))]))]
+    rules = {"X": grammar.Rule("X", grammar.Rhs([grammar.Alt(grammar.Atom(None, "Z"))]))}
     assert_parses_to(
         MetaGram,
         EXAMPLE_GRAM1,

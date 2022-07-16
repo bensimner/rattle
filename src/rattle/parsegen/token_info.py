@@ -8,11 +8,30 @@ from rattle.utils.enums import (
 )
 
 
+# sentinel to mean "skip this token" in the output AST
+SKIP = object()
+
+# sentinel meaning "tree tokenized correctly, but continue with 'next'"
+CONTINUE = object()
+
+
 @enum
 class TokenType:
     IDENT = auto()
     STRING = auto()
     NUMBER = auto()
+
+    def __format__(self, fmt):
+        if fmt == "src":
+            if self == TokenType.STRING:
+                return f'"{self.value}"'
+            elif self == TokenType.NUMBER:
+                return f"{self.value}"
+            elif self == TokenType.IDENT:
+                return f"{self.value}"
+            else:
+                return f'"{self.value}"'
+        return super().__format__(fmt)
 
 
 Lineno = int
